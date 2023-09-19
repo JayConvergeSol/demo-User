@@ -11,7 +11,10 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using static System.Net.WebRequestMethods;
+using MimeKit;
+using MimeKit.Text;
+using Org.BouncyCastle.Asn1.Pkcs;
+using MailKit.Net.Smtp;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -152,6 +155,26 @@ namespace demoUser.Api.Controllers
                 };
                 _userOtpService.AddAsync(oTP);
 
+                var htmlBody = "OTP :" + oTP.OTP.ToString();
+
+                var emailSender = new MimeMessage();
+                emailSender.From.Add(MailboxAddress.Parse(_config["EmailSender:SenderEmail"]));
+                emailSender.To.Add(MailboxAddress.Parse(email));
+                emailSender.Subject = "Forget Password OTP valid for 1 hour";
+                emailSender.Body = new TextPart(TextFormat.Html) { Text = htmlBody };
+
+                BodyBuilder emailBodyBuilder = new BodyBuilder();
+                emailBodyBuilder.HtmlBody = htmlBody;
+
+                emailSender.Body = emailBodyBuilder.ToMessageBody();
+
+                using (SmtpClient mailClient = new SmtpClient())
+                {
+                    mailClient.Connect(_config["EmailSender:Host"], 587, MailKit.Security.SecureSocketOptions.StartTls);
+                    mailClient.Authenticate(_config["EmailSender:UserName"], _config["EmailSender:Password"]);
+                    mailClient.Send(emailSender);
+                    mailClient.Disconnect(true);
+                }
                 string message = oTP.OTP;
                 return message;
             }
