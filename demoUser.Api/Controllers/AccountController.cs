@@ -30,13 +30,15 @@ namespace demoUser.Api.Controllers
         private readonly IConfiguration _config;
         private readonly IUserOtpService _userOtpService;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IMailService _mailService;
 
-        public AccountController(IUserService userService, IConfiguration config, IUserOtpService userOtpService, IWebHostEnvironment webHostEnvironment)
+        public AccountController(IUserService userService, IConfiguration config, IUserOtpService userOtpService, IWebHostEnvironment webHostEnvironment, IMailService mailService)
         {
             _userService = userService;
             _config = config;
             _userOtpService = userOtpService;
             _webHostEnvironment = webHostEnvironment;
+            _mailService = mailService;
         }
 
         [AllowAnonymous]
@@ -156,32 +158,40 @@ namespace demoUser.Api.Controllers
                     OTP = UtilityHelper.GenerateOTP().ToString(),
                     UserId = user.Id
                 };
-                _userOtpService.AddAsync(oTP);
+                await _userOtpService.AddAsync(oTP);
 
                 string wwwrootPath = _webHostEnvironment.WebRootPath;
                 string templateFilePath = Path.Combine(wwwrootPath, "EmailTemplates/ForgetPassword_Email_template.html");
                 string htmlTemplate = await System.IO.File.ReadAllTextAsync(templateFilePath);
                 htmlTemplate = htmlTemplate.Replace("#FullName#", user.FullName).Replace("#OTP#", oTP.OTP).Replace("#ProductName#","Demo-User");
 
-                var emailSender = new MimeMessage();
-                emailSender.From.Add(MailboxAddress.Parse(_config["EmailSender:SenderEmail"]));
-                emailSender.To.Add(MailboxAddress.Parse(email));
-                emailSender.Subject = "Forget Password OTP valid for 1 hour";
-                //emailSender.Body = new TextPart(TextFormat.Html) { Text = htmlTemplate };
 
-                BodyBuilder emailBodyBuilder = new BodyBuilder();
-                emailBodyBuilder.HtmlBody = htmlTemplate;
-
-                emailSender.Body = emailBodyBuilder.ToMessageBody();
-
-                using (SmtpClient mailClient = new SmtpClient())
+                MailSettingsDTO mailSettings = new MailSettingsDTO()
                 {
-                    mailClient.Connect(_config["EmailSender:Host"], int.Parse(_config["EmailSender:Port"]), MailKit.Security.SecureSocketOptions.StartTls);
-                    mailClient.Authenticate(_config["EmailSender:UserName"], _config["EmailSender:Password"]);
-                    mailClient.Send(emailSender);
-                    mailClient.Disconnect(true);
+                    Host = _config["EmailSender:Host"],
+                    Password = _config["EmailSender:Password"],
+                    Port = int.Parse(_config["EmailSender:Port"]),
+                    SenderEmail = _config["EmailSender:SenderEmail"],
+                    UserName = _config["EmailSender:UserName"]
+                };
+
+                MailData mailData = new MailData()
+                {
+                    Body = htmlTemplate,
+                    Subject = "Requested for Forget Password OTP",
+                    To = email
+                };
+                string message = string.Empty;
+                var mailSend = _mailService.sendMail(mailSettings, mailData);
+                if (mailSend)
+                {
+                    message = "Otp Send to Email";
                 }
-                string message = " Otp Send to Email";
+                else
+                {
+                    message = "error while sending Email";
+                }
+              
                 return message;
             }
         }
