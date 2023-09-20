@@ -15,6 +15,7 @@ using MimeKit;
 using MimeKit.Text;
 using Org.BouncyCastle.Asn1.Pkcs;
 using MailKit.Net.Smtp;
+using Microsoft.AspNetCore.Hosting;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -28,12 +29,14 @@ namespace demoUser.Api.Controllers
         private readonly IUserService _userService;
         private readonly IConfiguration _config;
         private readonly IUserOtpService _userOtpService;
+        private readonly IWebHostEnvironment _webHostEnvironment;
 
-        public AccountController(IUserService userService, IConfiguration config, IUserOtpService userOtpService)
+        public AccountController(IUserService userService, IConfiguration config, IUserOtpService userOtpService, IWebHostEnvironment webHostEnvironment)
         {
             _userService = userService;
             _config = config;
             _userOtpService = userOtpService;
+            _webHostEnvironment = webHostEnvironment;
         }
 
         [AllowAnonymous]
@@ -127,7 +130,7 @@ namespace demoUser.Api.Controllers
             }
             else
             {
-                await _userService.ChangePassword(ChangePassword.Email, ChangePassword.NewPassword);
+                await _userService.ChangePassword(ChangePassword.Email, UtilityHelper.PasswordHashMaker(ChangePassword.NewPassword));
                 string Message = "Password changed successfully";
                 return Message;
             }
@@ -155,22 +158,25 @@ namespace demoUser.Api.Controllers
                 };
                 _userOtpService.AddAsync(oTP);
 
-                var htmlBody = "OTP :" + oTP.OTP.ToString();
+                string wwwrootPath = _webHostEnvironment.WebRootPath;
+                string templateFilePath = Path.Combine(wwwrootPath, "EmailTemplates/ForgetPassword_Email_template.html");
+                string htmlTemplate = await System.IO.File.ReadAllTextAsync(templateFilePath);
+                htmlTemplate = htmlTemplate.Replace("#FullName#", user.FullName).Replace("#OTP#", oTP.OTP).Replace("#ProductName#","Demo-User");
 
                 var emailSender = new MimeMessage();
                 emailSender.From.Add(MailboxAddress.Parse(_config["EmailSender:SenderEmail"]));
                 emailSender.To.Add(MailboxAddress.Parse(email));
                 emailSender.Subject = "Forget Password OTP valid for 1 hour";
-                emailSender.Body = new TextPart(TextFormat.Html) { Text = htmlBody };
+                //emailSender.Body = new TextPart(TextFormat.Html) { Text = htmlTemplate };
 
                 BodyBuilder emailBodyBuilder = new BodyBuilder();
-                emailBodyBuilder.HtmlBody = htmlBody;
+                emailBodyBuilder.HtmlBody = htmlTemplate;
 
                 emailSender.Body = emailBodyBuilder.ToMessageBody();
 
                 using (SmtpClient mailClient = new SmtpClient())
                 {
-                    mailClient.Connect(_config["EmailSender:Host"], 587, MailKit.Security.SecureSocketOptions.StartTls);
+                    mailClient.Connect(_config["EmailSender:Host"], int.Parse(_config["EmailSender:Port"]), MailKit.Security.SecureSocketOptions.StartTls);
                     mailClient.Authenticate(_config["EmailSender:UserName"], _config["EmailSender:Password"]);
                     mailClient.Send(emailSender);
                     mailClient.Disconnect(true);
