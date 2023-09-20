@@ -175,7 +175,7 @@ namespace demoUser.Api.Controllers
                     mailClient.Send(emailSender);
                     mailClient.Disconnect(true);
                 }
-                string message = oTP.OTP;
+                string message = " Otp Send to Email";
                 return message;
             }
         }
