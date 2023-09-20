@@ -16,13 +16,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-
 #region scope
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddScoped<IUserOtpRepository, UserOtpRepository>();
 builder.Services.AddScoped<IUserOtpService, UserOtpService>();
+
+builder.Services.AddScoped<IMailService, MailService>();
 
 builder.Services.AddScoped<IMongoDBSettings, MongoDBSettings>();
 #endregion
@@ -116,7 +117,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-
+app.UseCors(a => a.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
 app.MapControllers();
 
 app.Run();
